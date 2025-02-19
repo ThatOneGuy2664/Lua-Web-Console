@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Web Console</title>
+    <script src="Fengari/fengari-web.js"></script>
+    <style>
+        body {
+            font-family: monospace;
+            background-color: #222;
+            color: #fff;
+        }
+        #consoleOutput {
+            background-color: #333;
+            border: 1px solid #444;
+            padding: 10px;
+            height: 300px;
+            overflow-y: scroll;
+            white-space: pre-wrap;
+        }
+        #luaInput {
+            width: 100%;
+            background-color: #555;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 5px;
+            font-size: 16px;
+            resize: none;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Lua Web Console</h1>
+    <div id="consoleOutput">Output will be displayed here:</div>
+    <textarea id="luaInput" placeholder="Type your input here..."></textarea>
+    <button id="runCommand">Submit</button>
+
+    <script>
+        const outputElement = document.getElementById("consoleOutput");
+        const inputElement = document.getElementById("luaInput");
+        const runButton = document.getElementById("runCommand");
+
+        const L = fengari.lauxlib.luaL_newstate();
+        fengari.lualib.luaL_openlibs(L);
+
+        function customPrint(...args) {
+            const applyColorFormatting = (text) => {
+                let formattedMessage = "";
+                let currentColor = "white";
+                const colorTagRegex = /\[([a-z]+)\](.*?)(?=\[|$)/g;
+                let match;
+                let lastIndex = 0;
+
+                while ((match = colorTagRegex.exec(text)) !== null) {
+                    formattedMessage += text.slice(lastIndex, match.index);
+                    currentColor = match[1];
+                    const content = match[2];
+
+                    formattedMessage += `<span style="color:${currentColor}">${content}</span>`;
+                    lastIndex = colorTagRegex.lastIndex;
+                }
+
+                formattedMessage += text.slice(lastIndex);
+                return formattedMessage.replace(/\[\]/g, "</span>");
+            };
+
+            const message = args.map(arg => arg.toString()).join(" ");
+            const formattedMessage = applyColorFormatting(message);
+            const outputText = `<br><span>${formattedMessage}</span>`;
+
+            outputElement.innerHTML += outputText;
+            outputElement.scrollTop = outputElement.scrollHeight;
+        }
+
+        function luaCustomPrint(L) {
+            const msg = fengari.lua.lua_tojsstring(L, 1);
+            setTimeout(function() {
+                customPrint(msg);
+            }, 500);
+            return 0;
+        }
+
+        fengari.lua.lua_pushjsfunction(L, luaCustomPrint);
+        fengari.lua.lua_setglobal(L, "customPrint");
+
+        function loadLocalLuaScript(filePath) {
+            return fetch(filePath)
+                .then(response => response.text())
+                .then(luaCode => {
+                    const status = fengari.lauxlib.luaL_dostring(L, fengari.to_luastring(luaCode));
+
+                    if (status !== 0) {
+                        const errorMsg = fengari.lua.lua_tojsstring(L, -1);
+                        customPrint("[red]Error executing script: " + errorMsg);
+                    }
+                })
+                .catch(error => {
+                    customPrint("[red]Error loading script: " + error.message);
+                });
+        }
+
+        async function loadLuaFiles() {
+            await loadLocalLuaScript("inputProcesser.lua"); // change this url to the Lua file you wish to load, can be any local file's path, I.e. "await loadLocalLuaScript("MyFile.lua");"
+        }
+
+        loadLuaFiles();
+
+        runButton.addEventListener("click", () => {
+            const input = inputElement.value.trim();
+
+            if (input) {
+                fengari.lua.lua_getglobal(L, "processPlayerInput");
+
+                if (!fengari.lua.lua_isfunction(L, -1)) {
+                    console.error("Error: processPlayerInput is not a function.");
+                } else {
+                    fengari.lua.lua_pushstring(L, input);
+                    inputElement.value = "";
+
+                    if (fengari.lua.lua_pcall(L, 1, 1, 0) !== 0) {
+                        console.error("Error executing Lua function:", fengari.lua.lua_tojsstring(L, -1));
+                    } else {
+                        const returnValue = fengari.lua.lua_tojsstring(L, -1);
+                        customPrint("[cyan]> " + returnValue); // optionally make it look like a terminal enviorment, simply delete this line if you don't like it
+                        fengari.lua.lua_pop(L, 1);
+                    }
+                }
+            }
+        });
+
+        inputElement.addEventListener("keypress", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                runButton.click();
+            }
+        });
+
+    </script>
+</body>
+</html>
