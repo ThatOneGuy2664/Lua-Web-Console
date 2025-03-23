@@ -6,11 +6,12 @@ function processPlayerInput(input)
     lastInputString = input
 
     if lastInputString and type(lastInputString) == "string" then
-    local func, err = load(lastInputString)
-    if not func then
-        customPrint("[crimson]Error in code: " .. err)
-    else
-        func()
+        local func, err = load(lastInputString)
+        if not func then
+            customPrint("[crimson]Error in code: " .. err)
+        else
+            func()
+        end
     end
         
     return input
