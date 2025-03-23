@@ -1,9 +1,18 @@
 local lastInputString = nil -- last user input, nil or string
 
+-- example to process user input
 function processPlayerInput(input)
     print("Player input received: " .. input)
     lastInputString = input
 
+    if lastInputString and type(lastInputString) == "string" then
+    local func, err = load(lastInputString)
+    if not func then
+        customPrint("[crimson]Error in code: " .. err)
+    else
+        func()
+    end
+        
     return input
 end
 
